@@ -5,11 +5,9 @@ import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.util.TypedValue;
-import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
 import android.view.View;
-import android.view.ViewGroup;
 import android.webkit.MimeTypeMap;
 import android.widget.EditText;
 import android.widget.TextView;
@@ -25,6 +23,7 @@ import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 public class TextFragment extends Fragment implements TextWatcher {
@@ -37,8 +36,6 @@ public class TextFragment extends Fragment implements TextWatcher {
     private float scaleFactor = 1f;
     private float baseSizeSp;
     private ScaleGestureDetector scaleDetector;
-
-    // Change this to private to follow encapsulation
     private boolean isSaved = false;
     private Uri fileUri;
 
@@ -58,13 +55,6 @@ public class TextFragment extends Fragment implements TextWatcher {
         }
     }
 
-    @Nullable
-    @Override
-    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,
-                             @Nullable Bundle savedInstanceState) {
-        return inflater.inflate(R.layout.fragment_text_code_studio, container, false);
-    }
-
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
@@ -79,22 +69,20 @@ public class TextFragment extends Fragment implements TextWatcher {
         fileContent.addTextChangedListener(this);
 
         baseSizeSp = fileContent.getTextSize() / getResources().getDisplayMetrics().scaledDensity;
-        scaleDetector = new ScaleGestureDetector(requireContext(),
-                new ScaleGestureDetector.SimpleOnScaleGestureListener() {
-                    @Override
-                    public boolean onScale(@NonNull ScaleGestureDetector detector) {
-                        scaleFactor *= detector.getScaleFactor();
-                        scaleFactor = Math.max(MIN_SCALE, Math.min(scaleFactor, MAX_SCALE));
-                        float newSizeSp = baseSizeSp * scaleFactor;
-                        lineNumbers.setTextSize(TypedValue.COMPLEX_UNIT_SP, newSizeSp);
-                        fileContent.setTextSize(TypedValue.COMPLEX_UNIT_SP, newSizeSp);
-                        return true;
-                    }
-                });
+        scaleDetector = new ScaleGestureDetector(requireContext(), new ScaleGestureDetector.SimpleOnScaleGestureListener() {
+            @Override
+            public boolean onScale(@NonNull ScaleGestureDetector detector) {
+                scaleFactor *= detector.getScaleFactor();
+                scaleFactor = Math.max(MIN_SCALE, Math.min(scaleFactor, MAX_SCALE));
+                float newSizeSp = baseSizeSp * scaleFactor;
+                lineNumbers.setTextSize(TypedValue.COMPLEX_UNIT_SP, newSizeSp);
+                fileContent.setTextSize(TypedValue.COMPLEX_UNIT_SP, newSizeSp);
+                return true;
+            }
+        });
 
         fileContent.setOnTouchListener((v, event) -> {
-            if (event.getPointerCount() > 1)
-                v.getParent().requestDisallowInterceptTouchEvent(true);
+            if (event.getPointerCount() > 1) v.getParent().requestDisallowInterceptTouchEvent(true);
             scaleDetector.onTouchEvent(event);
             int action = event.getActionMasked();
             if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL)
@@ -119,13 +107,15 @@ public class TextFragment extends Fragment implements TextWatcher {
     }
 
     private void updateLineNumbers() {
-        if (fileContent != null && lineNumbers != null) {
-            int lineCount = fileContent.getLineCount();
-            StringBuilder sb = new StringBuilder();
-            for (int i = 1; i <= lineCount; i++)
-                sb.append(i).append("\n");
-            lineNumbers.setText(sb.toString());
-        }
+        new Thread(() -> {
+            if (fileContent != null && lineNumbers != null) {
+                int lineCount = fileContent.getLineCount();
+                StringBuilder sb = new StringBuilder();
+                for (int i = 1; i <= lineCount; i++)
+                    sb.append(i).append("\n");
+                lineNumbers.setText(sb.toString());
+            }
+        }).start();
     }
 
     public byte[] getContents() {
@@ -151,63 +141,59 @@ public class TextFragment extends Fragment implements TextWatcher {
             if (ext != null)
                 mimeType = MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext.toLowerCase());
         }
-        if (mimeType == null)
-            return false;
-        return mimeType.startsWith("text/") || mimeType.equals("application/json")
-                || mimeType.equals("application/xml");
+        if (mimeType == null) return false;
+        return mimeType.startsWith("text/") || mimeType.equals("application/json") || mimeType.equals("application/xml");
     }
 
     private boolean isProbablyText(Uri uri) {
-        final int SAMPLE = 1024;
-        try (InputStream is = requireContext().getContentResolver().openInputStream(uri)) {
-            if (is == null)
-                return false;
-            byte[] buf = new byte[SAMPLE];
-            int read = is.read(buf);
-            if (read <= 0)
-                return false;
-            int nonPrintable = 0;
-            for (int i = 0; i < read; i++) {
-                byte b = buf[i];
-                if (b == 9 || b == 10 || b == 13)
-                    continue;
-                if (b < 0x20 || b > 0x7E)
-                    nonPrintable++;
+        AtomicBoolean result = new AtomicBoolean(false);
+        new Thread(() -> {
+            final int SAMPLE = 1024;
+            try (InputStream is = requireContext().getContentResolver().openInputStream(uri)) {
+                if (is == null) result.set(false);
+                byte[] buf = new byte[SAMPLE];
+                int read = is.read(buf);
+                if (read <= 0) result.set(false);
+                int nonPrintable = 0;
+                for (int i = 0; i < read; i++) {
+                    byte b = buf[i];
+                    if (b == 9 || b == 10 || b == 13) continue;
+                    if (b < 0x20 || b > 0x7E) nonPrintable++;
+                }
+                result.set(((double) nonPrintable / read) < 0.3);
+            } catch (Exception e) {
+                result.set(false);
             }
-            return ((double) nonPrintable / read) < 0.3;
-        } catch (Exception e) {
-            return false;
-        }
+        }).start();
+        return result.get();
     }
 
     private void loadFileContent() {
-        if (fileUri == null || fileUri.equals(ViewPagerAdapter.UNTITLED_FILE_URI))
-            return;
+        if (fileUri == null || fileUri.equals(ViewPagerAdapter.UNTITLED_FILE_URI)) return;
 
         new Thread(() -> {
             boolean readable = isTextFile(fileUri) && isProbablyText(fileUri);
 
-            requireActivity().runOnUiThread(() -> {
-                if (!readable) {
-                    Toast.makeText(getContext(), "Unsupported or non-text file", Toast.LENGTH_SHORT).show();
-                    fileContent.setText("");
-                    return;
-                }
+            if (!readable) {
+                Toast.makeText(getContext(), "Unsupported or non-text file", Toast.LENGTH_SHORT).show();
+                fileContent.setText("");
+                return;
+            }
 
-                try (InputStream inputStream = requireContext().getContentResolver().openInputStream(fileUri)) {
-                    if (inputStream != null) {
-                        BufferedReader reader = new BufferedReader(
-                                new InputStreamReader(inputStream, StandardCharsets.UTF_8));
-                        String content = reader.lines().collect(Collectors.joining("\n"));
-                        reader.close();
+            try (InputStream inputStream = requireContext().getContentResolver().openInputStream(fileUri)) {
+                if (inputStream != null) {
+                    BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8));
+                    String content = reader.lines().collect(Collectors.joining("\n"));
+                    reader.close();
+                    requireActivity().runOnUiThread(() -> {
                         fileContent.setText(content);
                         updateLineNumbers();
-                        isSaved = true;
-                    }
-                } catch (Exception e) {
-                    Toast.makeText(getContext(), "Error reading file", Toast.LENGTH_SHORT).show();
+                    });
+                    isSaved = true;
                 }
-            });
+            } catch (Exception e) {
+                Toast.makeText(getContext(), "Error reading file", Toast.LENGTH_SHORT).show();
+            }
         }).start();
     }
 

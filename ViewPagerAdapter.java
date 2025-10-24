@@ -121,7 +121,7 @@ public class ViewPagerAdapter extends FragmentStateAdapter {
             return TextFragment.newInstance(fileUri);
         } catch (Exception e) {
             e.printStackTrace();
-            Toast.makeText(this.activity, "Error opening file for editing.", 0).show();
+            Toast.makeText(this.activity, "Error opening file for editing.", Toast.LENGTH_SHORT).show();
             return new WelcomeFragment();
         }
     }

@@ -61,14 +61,14 @@ public class MainActivity extends AppCompatActivity implements TabLayout.OnTabSe
     private static final int REQUEST_CODE_OPEN_FILE = 2001;
     private static final int REQUEST_CODE_SAF = 1001;
     public static Uri currentDirectoryUri = null;
-    public static ViewPagerAdapter viewPagerAdapterCodeStudio;
+    public static ViewPagerAdapter viewPagerAdapter;
     public final ArrayList<Uri> folderUris = new ArrayList<>();
     public final ArrayList<String> folderNames = new ArrayList<>();
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final List<FileItem> fileItems = new ArrayList<>();
     public Uri currentFileUri;
     public String currentMimeType;
-    private TerminalFragment terminalFragmentCodeStudio;
+    private TerminalFragment terminalFragment;
     private TabLayout tabLayout;
     private ViewPager2 viewPager2;
     private DrawerLayout drawerLayout;
@@ -141,16 +141,16 @@ public class MainActivity extends AppCompatActivity implements TabLayout.OnTabSe
         viewPager2 = findViewById(R.id.viewPager2);
 
         List<Uri> initialUris = new ArrayList<>();
-        viewPagerAdapterCodeStudio = new ViewPagerAdapter(this, initialUris);
-        viewPager2.setAdapter(viewPagerAdapterCodeStudio);
+        viewPagerAdapter = new ViewPagerAdapter(this, initialUris);
+        viewPager2.setAdapter(viewPagerAdapter);
 
         tabLayout.addOnTabSelectedListener(this);
         progressBar = findViewById(R.id.progressBar);
         new TabLayoutMediator(tabLayout, viewPager2, (tab, position) -> {
-            tab.setText(viewPagerAdapterCodeStudio.fileNames.get(position));
+            tab.setText(viewPagerAdapter.fileNames.get(position));
             tab.view.setOnLongClickListener(v -> {
-                currentFileUri = viewPagerAdapterCodeStudio.getFileUris().get(position);
-                currentMimeType = getMimeType(viewPagerAdapterCodeStudio.fileUris.get(position));
+                currentFileUri = viewPagerAdapter.getFileUris().get(position);
+                currentMimeType = getMimeType(viewPagerAdapter.fileUris.get(position));
                 showPopupMenu(v, position);
                 return true;
             });
@@ -160,7 +160,7 @@ public class MainActivity extends AppCompatActivity implements TabLayout.OnTabSe
 
         restoreLastFolder();
 //        executionManager = new CodeExecutionManager(this, this);
-        terminalFragmentCodeStudio = null;
+        terminalFragment = null;
         Intent intent = getIntent();
         String action = intent.getAction();
         Uri uri = intent.getData();
@@ -172,15 +172,15 @@ public class MainActivity extends AppCompatActivity implements TabLayout.OnTabSe
         boolean showEditor = prefs.getBoolean("openEditorOnStartup", false);
         boolean showWelcome = prefs.getBoolean("openWelcomeScreenOnStartup", true);
 
-        if (viewPagerAdapterCodeStudio.getItemCount() == 0) {
+        if (viewPagerAdapter.getItemCount() == 0) {
             int welcomeIndex = -1;
             int editorIndex = -1;
 
             if (showWelcome) {
-                welcomeIndex = viewPagerAdapterCodeStudio.addTab(ViewPagerAdapter.WELCOME_URI, "Welcome");
+                welcomeIndex = viewPagerAdapter.addTab(ViewPagerAdapter.WELCOME_URI, "Welcome");
             }
             if (showEditor) {
-                editorIndex = viewPagerAdapterCodeStudio.addTab(ViewPagerAdapter.UNTITLED_FILE_URI, "Untitled");
+                editorIndex = viewPagerAdapter.addTab(ViewPagerAdapter.UNTITLED_FILE_URI, "Untitled");
             }
 
             // Decide which tab to show first
@@ -196,7 +196,6 @@ public class MainActivity extends AppCompatActivity implements TabLayout.OnTabSe
 //        } else {
 //            EnvironmentManager.setupEnvironment(this);
 //        }
-        getSupportFragmentManager().beginTransaction().replace(R.id.fragment_container, new TerminalFragment()).commit();
     }
 
     @Override
@@ -249,11 +248,11 @@ public class MainActivity extends AppCompatActivity implements TabLayout.OnTabSe
         popup.setOnMenuItemClickListener(item -> {
             int id = item.getItemId();
             if (id == R.id.close_tab) {
-                viewPagerAdapterCodeStudio.removeTab(position);
+                viewPagerAdapter.removeTab(position);
             } else if (id == R.id.close_other_tabs) {
-                viewPagerAdapterCodeStudio.removeOtherTabs(position);
+                viewPagerAdapter.removeOtherTabs(position);
             } else if (id == R.id.close_all_tabs) {
-                viewPagerAdapterCodeStudio.removeAllTabs();
+                viewPagerAdapter.removeAllTabs();
             }
             return true;
         });
@@ -265,7 +264,7 @@ public class MainActivity extends AppCompatActivity implements TabLayout.OnTabSe
             Uri fileUri = intent.getData();
             if (fileUri != null) {
                 String fileName = getFileName(fileUri);
-                int tabIndex = viewPagerAdapterCodeStudio.addTab(fileUri, fileName);
+                int tabIndex = viewPagerAdapter.addTab(fileUri, fileName);
                 if (tabIndex != -1) {
                     tabLayout.selectTab(tabLayout.getTabAt(tabIndex));
                     viewPager2.setCurrentItem(tabIndex);
@@ -318,25 +317,25 @@ public class MainActivity extends AppCompatActivity implements TabLayout.OnTabSe
             // separately
             // if
             // needed
-            viewPagerAdapterCodeStudio.addTab(uri, "Terminal"); // your tab system handles this
+            viewPagerAdapter.addTab(uri, "Terminal"); // your tab system handles this
             return true;
 
         } else if (id == R.id.editFile) {
             int currentTabPos = tabLayout.getSelectedTabPosition();
             if (currentTabPos != -1) {
-                String currentTabName = viewPagerAdapterCodeStudio.fileNames.get(currentTabPos);
+                String currentTabName = viewPagerAdapter.fileNames.get(currentTabPos);
 
                 // Check if the current tab is a "Run" tab
                 if (currentTabName.startsWith("Running")) {
                     // Find the original file's tab by its name
                     String originalFileName = currentTabName.substring("Running".length());
-                    int originalFileTabPos = viewPagerAdapterCodeStudio.findTabPositionByName(originalFileName);
+                    int originalFileTabPos = viewPagerAdapter.findTabPositionByName(originalFileName);
 
                     // Switch to the original file's tab and remove the "Run" tab
                     if (originalFileTabPos != -1) {
                         tabLayout.selectTab(tabLayout.getTabAt(originalFileTabPos));
                         viewPager2.setCurrentItem(originalFileTabPos);
-                        viewPagerAdapterCodeStudio.removeTab(currentTabPos);
+                        viewPagerAdapter.removeTab(currentTabPos);
                     }
                 }
             }
@@ -347,13 +346,13 @@ public class MainActivity extends AppCompatActivity implements TabLayout.OnTabSe
             invalidateOptionsMenu();
             return true;
         } else if (id == R.id.openWelcomeScreen) {
-            int newTabIndex = viewPagerAdapterCodeStudio.addTab(ViewPagerAdapter.WELCOME_URI, "Welcome");
+            int newTabIndex = viewPagerAdapter.addTab(ViewPagerAdapter.WELCOME_URI, "Welcome");
             if (newTabIndex != -1) {
                 tabLayout.selectTab(tabLayout.getTabAt(newTabIndex));
             }
             return true;
         } else if (id == R.id.saveFiles) {
-            List<FilesAdapter.FileContentItem> filesToSave = viewPagerAdapterCodeStudio.getOpenFilesContent();
+            List<FilesAdapter.FileContentItem> filesToSave = viewPagerAdapter.getOpenFilesContent();
             if (filesAdapterCodeStudio != null && !filesToSave.isEmpty()) {
                 filesAdapterCodeStudio.saveAllFiles(filesToSave);
             }
@@ -538,8 +537,8 @@ public class MainActivity extends AppCompatActivity implements TabLayout.OnTabSe
     public void onTabSelected(@NonNull TabLayout.Tab tab) {
         viewPager2.setCurrentItem(tab.getPosition());
         int pos = tab.getPosition();
-        if (pos < viewPagerAdapterCodeStudio.fileUris.size()) {
-            Uri uri = viewPagerAdapterCodeStudio.fileUris.get(pos);
+        if (pos < viewPagerAdapter.fileUris.size()) {
+            Uri uri = viewPagerAdapter.fileUris.get(pos);
             if (uri != null) {
                 // Set menu visibility based on file URI
                 FileItem item = FileUtils.getFileItemFromUri(this, uri); // You may already have
@@ -578,12 +577,12 @@ public class MainActivity extends AppCompatActivity implements TabLayout.OnTabSe
 //        }
 
         // 2. Hide input bar temporarily
-        if (terminalFragmentCodeStudio != null) {
-            terminalFragmentCodeStudio.setAwaitingInput(false);
+        if (terminalFragment != null) {
+            terminalFragment.setAwaitingInput(false);
         }
 
-        if (terminalFragmentCodeStudio != null) {
-            terminalFragmentCodeStudio.appendOutput("\n$ " + input + "\n");
+        if (terminalFragment != null) {
+            terminalFragment.appendOutput("\n$ " + input + "\n");
         }
 
     }
@@ -591,7 +590,7 @@ public class MainActivity extends AppCompatActivity implements TabLayout.OnTabSe
     @Override
     public void onOutputReceived(String output) {
         int currentTab = tabLayout.getSelectedTabPosition();
-        Fragment fragment = viewPagerAdapterCodeStudio.createFragment(currentTab);
+        Fragment fragment = viewPagerAdapter.createFragment(currentTab);
         if (fragment instanceof TerminalFragment) {
             ((TerminalFragment) fragment).appendOutput(output);
         }
@@ -753,8 +752,8 @@ public class MainActivity extends AppCompatActivity implements TabLayout.OnTabSe
             String fileName = getFileName(uri);
 
             // 3. Open file in a new tab
-            if (viewPagerAdapterCodeStudio != null) {
-                int position = viewPagerAdapterCodeStudio.addTab(uri, fileName);
+            if (viewPagerAdapter != null) {
+                int position = viewPagerAdapter.addTab(uri, fileName);
                 // Assuming viewPager2 is an instance member of MainActivity
                 if (viewPager2 != null) {
                     viewPager2.setCurrentItem(position, true);
@@ -848,7 +847,7 @@ public class MainActivity extends AppCompatActivity implements TabLayout.OnTabSe
             }
         } else {
             // OPEN AS TAB FOR EDITING (Code, Text, XML, JSON, Unknown)
-            int tabIndex = viewPagerAdapterCodeStudio.addTab(fileUri, fileName);
+            int tabIndex = viewPagerAdapter.addTab(fileUri, fileName);
             if (tabIndex != -1) {
                 tabLayout.selectTab(tabLayout.getTabAt(tabIndex));
                 viewPager2.setCurrentItem(tabIndex);
@@ -867,16 +866,16 @@ public class MainActivity extends AppCompatActivity implements TabLayout.OnTabSe
 
     @Nullable
     private FileItem findFileItemByUri(Uri uri) {
-        if (viewPagerAdapterCodeStudio.fileUris == null || viewPagerAdapterCodeStudio.fileNames == null)
+        if (viewPagerAdapter.fileUris == null || viewPagerAdapter.fileNames == null)
             return null;
 
         // Check the list of currently open files/tabs
-        for (int i = 0; i < viewPagerAdapterCodeStudio.getFileUris().size(); i++) {
-            if (viewPagerAdapterCodeStudio.getFileUris().get(i).equals(uri)) {
+        for (int i = 0; i < viewPagerAdapter.getFileUris().size(); i++) {
+            if (viewPagerAdapter.getFileUris().get(i).equals(uri)) {
                 // NOTE: This only creates a FileItem object, it doesn't retrieve the one from
                 // the Drawer.
                 // But it contains the necessary info (Uri, Name) for the context menu.
-                return new FileItem(this, uri, viewPagerAdapterCodeStudio.getFileNames().get(i), false, // Not
+                return new FileItem(this, uri, viewPagerAdapter.getFileNames().get(i), false, // Not
                         // a
                         // directory
                         0);
@@ -953,7 +952,7 @@ public class MainActivity extends AppCompatActivity implements TabLayout.OnTabSe
 
                         // Update UI: File Browser and open tab
                         refreshAll();
-                        viewPagerAdapterCodeStudio.renameTab(fileItem.uri, newUri, newName);
+                        viewPagerAdapter.renameTab(fileItem.uri, newUri, newName);
                     });
                 } else {
                     runOnUiThread(() -> Toast.makeText(this, "Failed to rename file. Check permissions or new name validity.", Toast.LENGTH_LONG).show());
@@ -988,9 +987,9 @@ public class MainActivity extends AppCompatActivity implements TabLayout.OnTabSe
     }
 
     public void removeTabForUri(Uri uri) {
-        int index = viewPagerAdapterCodeStudio.fileUris.indexOf(uri);
+        int index = viewPagerAdapter.fileUris.indexOf(uri);
         if (index != -1) {
-            viewPagerAdapterCodeStudio.removeTab(index);
+            viewPagerAdapter.removeTab(index);
         }
     }
 
@@ -1098,9 +1097,9 @@ public class MainActivity extends AppCompatActivity implements TabLayout.OnTabSe
 
         ArrayList<String> uris = new ArrayList<>();
         ArrayList<String> names = new ArrayList<>();
-        for (Uri uri : viewPagerAdapterCodeStudio.fileUris)
+        for (Uri uri : viewPagerAdapter.fileUris)
             uris.add(uri.toString());
-        names.addAll(viewPagerAdapterCodeStudio.fileNames);
+        names.addAll(viewPagerAdapter.fileNames);
 
         outState.putStringArrayList("tab_uris", uris);
         outState.putStringArrayList("tab_names", names);
@@ -1120,15 +1119,15 @@ public class MainActivity extends AppCompatActivity implements TabLayout.OnTabSe
             for (String s : uris)
                 restoredUris.add(Uri.parse(s));
 
-            viewPagerAdapterCodeStudio = new ViewPagerAdapter(this, restoredUris);
-            viewPagerAdapterCodeStudio.fileNames.clear();
-            viewPagerAdapterCodeStudio.fileNames.addAll(names);
+            viewPagerAdapter = new ViewPagerAdapter(this, restoredUris);
+            viewPagerAdapter.fileNames.clear();
+            viewPagerAdapter.fileNames.addAll(names);
 
-            viewPager2.setAdapter(viewPagerAdapterCodeStudio);
+            viewPager2.setAdapter(viewPagerAdapter);
 
             new TabLayoutMediator(tabLayout, viewPager2, (tab, position) -> tab.setText(names.get(position))).attach();
 
-            if (currentTab < viewPagerAdapterCodeStudio.getItemCount()) {
+            if (currentTab < viewPagerAdapter.getItemCount()) {
                 tabLayout.selectTab(tabLayout.getTabAt(currentTab));
                 viewPager2.setCurrentItem(currentTab);
             }
@@ -1137,7 +1136,7 @@ public class MainActivity extends AppCompatActivity implements TabLayout.OnTabSe
 
     private void refreshAll() {
         // 1. Initial check for essential components
-        if (folderUri == null || filesAdapterCodeStudio == null || viewPagerAdapterCodeStudio == null || executor == null)
+        if (folderUri == null || filesAdapterCodeStudio == null || viewPagerAdapter == null || executor == null)
             return;
 
         // 2. Start UI updates (must run on Main Thread)
@@ -1158,7 +1157,7 @@ public class MainActivity extends AppCompatActivity implements TabLayout.OnTabSe
 
             // Get URIs of open and potentially modified files to preserve their state/tab.
             List<Uri> openFileUris = new ArrayList<>();
-            for (FilesAdapter.FileContentItem file : viewPagerAdapterCodeStudio.getOpenFilesContent()) {
+            for (FilesAdapter.FileContentItem file : viewPagerAdapter.getOpenFilesContent()) {
                 openFileUris.add(file.getUri());
             }
 
@@ -1206,7 +1205,7 @@ public class MainActivity extends AppCompatActivity implements TabLayout.OnTabSe
                 if (currentTabPos != -1) {
                     // ASSUMPTION: The adapter has a getFragment() method to retrieve the instance.
                     // You MUST implement this in your ViewPagerAdapter.
-                    Fragment currentFragment = viewPagerAdapterCodeStudio.getFragment(currentTabPos);
+                    Fragment currentFragment = viewPagerAdapter.getFragment(currentTabPos);
 
                     // ASSUMPTION: TextFragment implements a public refreshContent() method.
                     // Cast and call the refresh method if the fragment type is correct.
@@ -1325,9 +1324,9 @@ public class MainActivity extends AppCompatActivity implements TabLayout.OnTabSe
                 runOnUiThread(() -> {
                     // Remove the old 'Untitled' tab and open the new file tab
                     // First, find and remove the 'Untitled' tab
-                    int untitledPos = viewPagerAdapterCodeStudio.findTabPositionByName("Untitled");
+                    int untitledPos = viewPagerAdapter.findTabPositionByName("Untitled");
                     if (untitledPos != -1) {
-                        viewPagerAdapterCodeStudio.removeTab(untitledPos);
+                        viewPagerAdapter.removeTab(untitledPos);
                     }
 
                     // Now, open the newly saved file
@@ -1346,7 +1345,7 @@ public class MainActivity extends AppCompatActivity implements TabLayout.OnTabSe
 
     private void openFileInViewPager(Uri fileUri, String fileName) {
         // 1. Use the adapter to add the tab or find its existing position
-        int position = viewPagerAdapterCodeStudio.addTab(fileUri, fileName);
+        int position = viewPagerAdapter.addTab(fileUri, fileName);
 
         // 2. Switch the ViewPager2 to the newly created/found position
         viewPager2.setCurrentItem(position, true);
