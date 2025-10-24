@@ -32,7 +32,6 @@ public class TextFragment extends Fragment implements TextWatcher {
     private static final String ARG_URI = "file_uri";
     private final float MIN_SCALE = 0.5f;
     private final float MAX_SCALE = 3.0f;
-
     private TextView lineNumbers;
     private EditText fileContent;
     private float scaleFactor = 1f;
